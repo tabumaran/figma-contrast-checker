@@ -1,0 +1,56 @@
+<style>
+  :root { --bg: var(--figma-color-bg, #fff); --text: var(--figma-color-text, #111); --muted: var(--figma-color-text-secondary, #666); --line: var(--figma-color-border, #e5e5e5); }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 12px/1.4 Inter, system-ui, sans-serif; color: var(--text); background: var(--bg); }
+  header { position: sticky; top: 0; background: var(--bg); padding: 12px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 13px; margin: 0 0 4px; }
+  .summary { color: var(--muted); margin-bottom: 8px; }
+  button { width: 100%; padding: 8px; border: 0; border-radius: 6px; background: #2f6fed; color: #fff; font-weight: 600; cursor: pointer; }
+  button:focus-visible { outline: 3px solid #6ea8ff; outline-offset: 2px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  li:hover, li:focus { background: var(--figma-color-bg-hover, #f5f5f5); outline: none; }
+  .row { display: flex; justify-content: space-between; gap: 8px; }
+  .badge { font-weight: 700; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+  .pass { background: #e3f6ec; color: #1a7f55; }
+  .fail { background: #fde7e7; color: #c62a2f; }
+  .manual { background: #fff4dc; color: #8a5a00; }
+  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { color: var(--muted); margin-top: 2px; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 1px solid var(--line); vertical-align: -1px; }
+  .empty { padding: 24px 12px; color: var(--muted); text-align: center; }
+</style>
+<header>
+  <h1>Contrast Checker</h1>
+  <div class="summary" id="summary">Checking…</div>
+  <button id="check">Check again</button>
+</header>
+<ul id="list" aria-live="polite"></ul>
+<script>
+  const list = document.getElementById("list");
+  const summary = document.getElementById("summary");
+  document.getElementById("check").onclick = () => parent.postMessage({ pluginMessage: { type: "check" } }, "*");
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+  onmessage = (e) => {
+    const msg = e.data.pluginMessage;
+    if (!msg || msg.type !== "results") return;
+    const r = msg.results;
+    const n = (s) => r.filter(x => x.status === s).length;
+    summary.textContent = `${r.length} text layers in ${msg.scope} · ${n("fail")} fail · ${n("manual")} check manually · ${n("pass")} pass`;
+    if (!r.length) { list.innerHTML = '<li class="empty">No text layers found. Select a frame or run on the page.</li>'; return; }
+    list.innerHTML = r.map(x => `
+      <li tabindex="0" data-id="${esc(x.id)}">
+        <div class="row"><span class="name">${esc(x.text || x.layer)}</span><span class="badge ${x.status}">${x.status === "manual" ? "CHECK" : x.status.toUpperCase()}</span></div>
+        <div class="meta">${x.status === "manual"
+          ? esc(x.note)
+          : `<span class="swatch" style="background:${x.fg}"></span> on <span class="swatch" style="background:${x.bg}"></span> · ${x.ratio}:1 (needs ${x.needed}:1) · ${x.fontSize}px`}</div>
+      </li>`).join("");
+    list.querySelectorAll("li[data-id]").forEach(li => {
+      const go = () => parent.postMessage({ pluginMessage: { type: "select", id: li.dataset.id } }, "*");
+      li.onclick = go;
+      li.onkeydown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } };
+    });
+  };
+</script>
